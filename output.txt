@@ -1,0 +1,9 @@
+total 48
+drwxr-xr-x 3 srira srira  4096 May 15 16:08 .
+drwxr-x--- 6 srira srira  4096 May 13 04:21 ..
+drwxr-xr-x 7 srira srira  4096 May 14 17:04 .git
+-rw-r--r-- 1 srira srira   111 May 11 13:28 Makefile
+-rwxr-xr-x 1 srira srira 22368 May 15 16:08 myshell
+-rw-r--r-- 1 srira srira     0 May 15 16:08 output.txt
+-rw-r--r-- 1 srira srira  4848 May 15 16:08 shell.c
+"line 2"

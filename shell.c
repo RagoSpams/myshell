@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>  // add this at the top of the file with your other includes
+
 
 #define MAX_INPUT 1024
 #define MAX_ARGS  64
@@ -28,6 +30,36 @@ int tokenize(char *input, char **args) {
     return count;
 }
 
+void handle_redirection(char **args) {
+    for (int i = 0; args[i] != NULL; i++) {
+
+        if (strcmp(args[i], ">") == 0) {
+            // Open file for writing (creates it if it doesn't exist, truncates if it does)
+            int fd = open(args[i+1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) { perror(args[i+1]); exit(1); }
+            dup2(fd, STDOUT_FILENO);  // stdout now goes to the file
+            close(fd);
+            args[i] = NULL;  // cut off args here so execvp doesn't see ">" or filename
+
+        } else if (strcmp(args[i], ">>") == 0) {
+            // Open file for appending
+            int fd = open(args[i+1], O_WRONLY | O_CREAT | O_APPEND, 0644);
+            if (fd < 0) { perror(args[i+1]); exit(1); }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            args[i] = NULL;
+
+        } else if (strcmp(args[i], "<") == 0) {
+            // Open file for reading, redirect stdin
+            int fd = open(args[i+1], O_RDONLY);
+            if (fd < 0) { perror(args[i+1]); exit(1); }
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+            args[i] = NULL;
+        }
+    }
+}
+
 // Forks a child process and runs the command
 void execute(char **args) {
     pid_t pid = fork();
@@ -41,6 +73,7 @@ void execute(char **args) {
         // We are in the CHILD process
         // execvp replaces this child process with the requested program
         // It searches PATH automatically (that's what the 'p' means)
+        handle_redirection(args);  // ADD THIS LINE
         if (execvp(args[0], args) == -1) {
             perror(args[0]);  // prints "ls: No such file or directory" etc.
             exit(1);
