@@ -61,30 +61,68 @@ void handle_redirection(char **args) {
 }
 
 // Forks a child process and runs the command
-void execute(char **args) {
-    pid_t pid = fork();
+// Finds the index of a pipe "|" in args, or returns -1
+int find_pipe(char **args) {
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "|") == 0) return i;
+    }
+    return -1;
+}
 
-    if (pid < 0) {
-        perror("fork failed");
+void execute(char **args) {
+    int pipe_pos = find_pipe(args);
+
+    if (pipe_pos == -1) {
+        // No pipe — same as before
+        pid_t pid = fork();
+        if (pid == 0) {
+            handle_redirection(args);
+            if (execvp(args[0], args) == -1) {
+                perror(args[0]);
+                exit(1);
+            }
+        } else {
+            int status;
+            waitpid(pid, &status, 0);
+        }
         return;
     }
 
-    if (pid == 0) {
-        // We are in the CHILD process
-        // execvp replaces this child process with the requested program
-        // It searches PATH automatically (that's what the 'p' means)
-        handle_redirection(args);  // ADD THIS LINE
-        if (execvp(args[0], args) == -1) {
-            perror(args[0]);  // prints "ls: No such file or directory" etc.
-            exit(1);
-        }
-    } else {
-        // We are in the PARENT process (the shell)
-        // Wait for the child to finish before showing next prompt
-        int status;
-        waitpid(pid, &status, 0);
+    // Split args into left and right at the pipe
+    args[pipe_pos] = NULL;
+    char **left  = args;
+    char **right = args + pipe_pos + 1;
+
+    int fd[2];
+    if (pipe(fd) < 0) { perror("pipe"); return; }
+
+    pid_t pid1 = fork();
+    if (pid1 == 0) {
+        // Left child: write its stdout to the pipe's write end
+        dup2(fd[1], STDOUT_FILENO);
+        close(fd[0]);
+        close(fd[1]);
+        handle_redirection(left);
+        if (execvp(left[0], left) == -1) { perror(left[0]); exit(1); }
     }
+
+    pid_t pid2 = fork();
+    if (pid2 == 0) {
+        // Right child: read its stdin from the pipe's read end
+        dup2(fd[0], STDIN_FILENO);
+        close(fd[0]);
+        close(fd[1]);
+        handle_redirection(right);
+        if (execvp(right[0], right) == -1) { perror(right[0]); exit(1); }
+    }
+
+    // Parent closes both ends and waits for both children
+    close(fd[0]);
+    close(fd[1]);
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
 }
+
 char history[MAX_HISTORY][MAX_INPUT];
 int history_count = 0;
 
