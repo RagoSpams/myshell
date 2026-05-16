@@ -13,8 +13,11 @@
 
 // Prints the prompt
 void print_prompt() {
-    printf("myshell> ");
-    fflush(stdout);  // force it to display immediately
+    char cwd[1024];
+    getcwd(cwd, sizeof(cwd));
+    // \033[1;32m = bold green, \033[1;34m = bold blue, \033[0m = reset
+    printf("\033[1;32mmyshell\033[0m:\033[1;34m%s\033[0m$ ", cwd);
+    fflush(stdout);
 }
 
 // Splits the input string into an array of argument tokens
@@ -69,7 +72,7 @@ int find_pipe(char **args) {
     return -1;
 }
 
-void execute(char **args) {
+void execute(char **args, int background) {
     int pipe_pos = find_pipe(args);
 
     if (pipe_pos == -1) {
@@ -82,8 +85,12 @@ void execute(char **args) {
                 exit(1);
             }
         } else {
-            int status;
-            waitpid(pid, &status, 0);
+            if (background){
+                printf("[background] pid %d\n", pid);
+            } else {
+                int status;
+                waitpid(pid, &status, 0);
+            }
         }
         return;
     }
@@ -196,6 +203,15 @@ int main() {
         int count = tokenize(input, args);
         if (count == 0) continue;
 
+        int background = 0;
+        int arg_count = 0;
+        while (args[arg_count] != NULL) arg_count++;
+
+        if (arg_count > 0 && strcmp(args[arg_count - 1], "&") == 0) {
+            background = 1;
+            args[arg_count - 1] = NULL;  // remove the & from args
+}
+
         // 5. Check for "exit"
         if (strcmp(args[0], "exit") == 0) {
             break;
@@ -204,7 +220,7 @@ int main() {
         // 6. Try to run as a built-in (cd, history). 
         // If it's NOT a built-in, then execute it as a normal program.
         if (!handle_builtin(args)) {
-            execute(args);
+            execute(args, background);
         }
     }
 
